@@ -67,4 +67,27 @@ describe("Stateless Cryptographic Auth", () => {
     const result = verifySessionToken(tampered);
     expect(result.valid).toBe(false);
   });
+
+  it("handles first-time users: token generated without prior DB user, verified, and replay-protected after creation", () => {
+    const newEmail = "alice.wonderland@example.com";
+    
+    // 1. First-time user requests link (no lastLoginAt in DB)
+    const token = createMagicLinkToken(newEmail, null);
+    
+    // 2. Verification succeeds with lastLoginAt = null
+    const verifyResult = verifyMagicLinkToken(token, null);
+    expect(verifyResult.valid).toBe(true);
+    expect(verifyResult.email).toBe(newEmail);
+
+    // 3. User name derived from email prefix
+    const derivedName = newEmail.split("@")[0];
+    expect(derivedName).toBe("alice.wonderland");
+
+    // 4. Once user is created and lastLoginAt is set, reusing the same token fails
+    const userCreatedLoginAt = new Date();
+    const replayResult = verifyMagicLinkToken(token, userCreatedLoginAt);
+    expect(replayResult.valid).toBe(false);
+    expect(replayResult.error).toContain("Invalid signature or token already used");
+  });
 });
+

@@ -15,21 +15,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please provide a valid email address" }, { status: 400 });
     }
 
-    // 1. Find or create user in Postgres
-    let user = (await db.select().from(users).where(eq(users.email, email)))[0];
-    if (!user) {
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          email,
-          name: email.split("@")[0],
-        })
-        .returning();
-      user = newUser;
-    }
+    // 1. Check if user already exists to retrieve their lastLoginAt salt
+    const user = (await db.select().from(users).where(eq(users.email, email)))[0];
+    const lastLoginAt = user?.lastLoginAt || null;
 
-    // 2. Generate stateless magic token (salted with lastLoginAt for replay prevention)
-    const token = createMagicLinkToken(user.email, user.lastLoginAt);
+    // 2. Generate stateless magic token (works for existing and first-time users)
+    const token = createMagicLinkToken(email, lastLoginAt);
 
     // 3. Construct Magic Link URL
     const origin =

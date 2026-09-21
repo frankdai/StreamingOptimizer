@@ -38,14 +38,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(baseUrl);
     }
 
-    const user = (await db.select().from(users).where(eq(users.email, payload.email)))[0];
-    if (!user) {
-      baseUrl.searchParams.set("auth_error", "user_not_found");
-      return NextResponse.redirect(baseUrl);
-    }
+    let user = (await db.select().from(users).where(eq(users.email, payload.email)))[0];
+    const lastLoginAt = user?.lastLoginAt || null;
 
-    // 2. Verify token signature against user's lastLoginAt
-    const verification = verifyMagicLinkToken(token, user.lastLoginAt);
+    // 2. Verify token signature against user's lastLoginAt (null for first-time user)
+    const verification = verifyMagicLinkToken(token, lastLoginAt);
     if (!verification.valid || !verification.email) {
       baseUrl.searchParams.set(
         "auth_error",
@@ -54,11 +51,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(baseUrl);
     }
 
-    // 3. Mark user as logged in (instant revocation of this magic link!)
-    await db
-      .update(users)
-      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
-      .where(eq(users.id, user.id));
+    // 3. If first-time user, automatically create user record with name from email prefix
+    if (!user) {
+      const derivedName = payload.email.split("@")[0];
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          email: payload.email,
+          name: derivedName,
+          lastLoginAt: new Date(),
+        })
+        .returning();
+      user = newUser;
+    } else {
+      // Existing user: mark as logged in (instant single-use revocation of this magic link!)
+      await db
+        .update(users)
+        .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+    }
 
     // 4. Create 30-day session token
     const sessionToken = createSessionToken({

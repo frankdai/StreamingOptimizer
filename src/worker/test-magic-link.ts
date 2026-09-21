@@ -5,57 +5,74 @@ import { createMagicLinkToken, verifyMagicLinkToken, createSessionToken, verifyS
 import { getMailer } from "../lib/email/mailer";
 import { generateMagicLinkEmail } from "../lib/email/templates";
 
-async function testFullMagicLinkFlow() {
-  console.log("Testing end-to-end Magic Link Flow...");
+async function testFirstTimeUserFlow() {
+  console.log("=================================================");
+  console.log("Testing First-Time User Magic Link Auto-Creation");
+  console.log("=================================================");
 
-  const email = "frank@example.com";
+  const newEmail = `user_${Date.now()}@example.com`;
+  console.log(`Target new user email: ${newEmail}`);
 
-  // 1. Get or create user
-  let user = (await db.select().from(users).where(eq(users.email, email)))[0];
-  if (!user) {
-    const [newUser] = await db.insert(users).values({ email, name: "Frank" }).returning();
-    user = newUser;
-  }
+  // 1. Verify user does NOT exist in DB yet
+  const existingUser = (await db.select().from(users).where(eq(users.email, newEmail)))[0];
+  console.log("Initial DB check (should be undefined):", existingUser);
+  if (existingUser) throw new Error("User unexpectedly exists");
 
-  // 2. Generate stateless magic link token
-  const token = createMagicLinkToken(user.email, user.lastLoginAt);
-  console.log("Generated Magic Token (stateless, 0 DB rows):", token.slice(0, 35) + "...");
+  // 2. Request magic link without creating DB user (stateless token generation with null lastLoginAt)
+  const token = createMagicLinkToken(newEmail, null);
+  console.log("1. Generated stateless token without pre-creating DB row:", token.slice(0, 30) + "...");
 
-  // 3. Send via local Mailpit
+  // 3. Send email to Mailpit on localhost:1025
   const mailer = getMailer();
   const magicLinkUrl = `http://localhost:3000/api/auth/verify?token=${encodeURIComponent(token)}`;
-  const emailContent = generateMagicLinkEmail({ email: user.email, magicLinkUrl });
+  const emailContent = generateMagicLinkEmail({ email: newEmail, magicLinkUrl });
 
-  const sendResult = await mailer.sendEmail({
-    to: user.email,
+  await mailer.sendEmail({
+    to: newEmail,
     ...emailContent,
   });
-  console.log("Email dispatch result:", sendResult);
 
-  // 4. Verify token
-  const verifyResult = verifyMagicLinkToken(token, user.lastLoginAt);
-  console.log("Token Verification Check:", verifyResult);
-  if (!verifyResult.valid) throw new Error("Verification failed");
+  // 4. Verification step: verify token signature with null lastLoginAt
+  const verification = verifyMagicLinkToken(token, null);
+  console.log("2. Token verification result:", verification);
+  if (!verification.valid) throw new Error("Token failed to verify");
 
-  // 5. Update lastLoginAt (simulating single-use invalidation)
-  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+  // 5. Automatic user creation on verification with derived name
+  const derivedName = newEmail.split("@")[0];
+  const [createdUser] = await db
+    .insert(users)
+    .values({
+      email: newEmail,
+      name: derivedName,
+      lastLoginAt: new Date(),
+    })
+    .returning();
 
-  // 6. Test replay: should fail now!
-  const updatedUser = (await db.select().from(users).where(eq(users.id, user.id)))[0];
-  const replayResult = verifyMagicLinkToken(token, updatedUser.lastLoginAt);
-  console.log("Replay Prevention Check (should be invalid):", replayResult);
+  console.log(`3. Automatically created user in Postgres!`);
+  console.log(`   - ID: ${createdUser.id}`);
+  console.log(`   - Email: ${createdUser.email}`);
+  console.log(`   - Derived Name: "${createdUser.name}"`);
 
-  // 7. Create 30-day session
-  const sessionToken = createSessionToken({ id: user.id, email: user.email, name: user.name });
-  const sessionVerify = verifySessionToken(sessionToken);
-  console.log("30-Day Session Verification Check:", sessionVerify);
+  // 6. Test replay prevention: trying to use the same token again should now fail!
+  const replayVerification = verifyMagicLinkToken(token, createdUser.lastLoginAt);
+  console.log("4. Replay check (should be invalid):", replayVerification);
+  if (replayVerification.valid) throw new Error("Replay should have failed");
 
-  console.log("\nALL MAGIC LINK & SESSION CHECKS PASSED!");
+  // 7. Issue 30-day session
+  const sessionToken = createSessionToken({
+    id: createdUser.id,
+    email: createdUser.email,
+    name: createdUser.name,
+  });
+  const sessionResult = verifySessionToken(sessionToken);
+  console.log("5. 30-day session created successfully:", sessionResult);
+
+  console.log("\n[SUCCESS] First-time user auto-creation flow verified!");
 }
 
-testFullMagicLinkFlow()
+testFirstTimeUserFlow()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error("Test failed:", err);
+    console.error("Test error:", err);
     process.exit(1);
   });
