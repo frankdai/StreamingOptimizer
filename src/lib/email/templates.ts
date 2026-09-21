@@ -138,3 +138,61 @@ Stream Optimizer Team`;
 
   return { subject, text, html };
 }
+
+/**
+ * Generate email for passwordless Magic Link login
+ */
+export function generateMagicLinkEmail(params: {
+  magicLinkUrl: string;
+  email: string;
+}): { subject: string; text: string; html: string } {
+  const subject = "🔐 Your Stream Optimizer Sign-In Link";
+
+  const text = `Hi,
+
+Click the link below to sign in to Stream Optimizer:
+${params.magicLinkUrl}
+
+This link will expire in 10 minutes and can only be used once.
+
+If you didn't request this link, you can safely ignore this email.
+
+Stream Optimizer Team`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px; }
+    .card { max-width: 520px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 28px; border: 1px solid #334155; text-align: center; }
+    .btn { display: inline-block; background: #6366f1; color: white !important; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 8px; margin: 20px 0; font-size: 16px; }
+    .footer { font-size: 12px; color: #64748b; margin-top: 24px; border-top: 1px solid #334155; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="font-size: 32px; margin-bottom: 12px;">🍿</div>
+    <h2 style="color: #f8fafc; margin: 0 0 8px 0;">Sign in to Stream Optimizer</h2>
+    <p style="color: #94a3b8; font-size: 14px; margin: 0 0 16px 0;">
+      Click the button below to securely sign in to your account.
+    </p>
+
+    <a href="${params.magicLinkUrl}" class="btn" target="_blank">Sign In to Dashboard &rarr;</a>
+
+    <p style="color: #cbd5e1; font-size: 13px; margin: 12px 0 0 0;">
+      ⏱️ <strong>This link expires in 10 minutes</strong> and can only be used once.
+    </p>
+
+    <div class="footer">
+      If you didn't request this email, you can safely ignore it.<br>
+      Stream Optimizer &bull; 100% Isolated & Open Source
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+

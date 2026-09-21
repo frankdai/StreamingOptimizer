@@ -14,6 +14,7 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/worker/seed.ts",
     "db:studio": "drizzle-kit studio",
+    "auth:test": "tsx src/worker/test-magic-link.ts",
     "email:test": "tsx src/worker/test-email.ts",
     "worker:run": "tsx src/worker/daily-sync.ts"
   },
