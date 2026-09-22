@@ -33,12 +33,12 @@ export async function POST(request: NextRequest) {
     // 4. Send email (Mailpit on port 1025 in dev; Resend in prod)
     const mailer = getMailer();
     const emailContent = generateMagicLinkEmail({
-      email: user.email,
+      email,
       magicLinkUrl,
     });
 
     await mailer.sendEmail({
-      to: user.email,
+      to: email,
       ...emailContent,
     });
 
