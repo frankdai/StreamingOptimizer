@@ -155,11 +155,13 @@ export function WatchlistManager({
       </div>
 
       {/* Episode Schedule Modal */}
-      <ShowScheduleModal
-        show={selectedShow}
-        onClose={() => setSelectedShow(null)}
-        onTogglePreference={onTogglePreference}
-      />
+      {selectedShow && (
+        <ShowScheduleModal
+          show={selectedShow}
+          onClose={() => setSelectedShow(null)}
+          onTogglePreference={onTogglePreference}
+        />
+      )}
     </div>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Calendar, Clock, Film, Radio, Layers, CheckCircle2, AlertCircle } from "lucide-react";
+import { X, Calendar, Clock, Radio, Layers, CheckCircle2 } from "lucide-react";
 import { Episode, Show, STREAMING_PLATFORMS, ViewingPreference } from "@/lib/types";
 import { formatDate } from "@/lib/optimizer";
 
 interface ShowScheduleModalProps {
-  show: Show | null;
+  show: Show;
   onClose: () => void;
   onTogglePreference?: (showId: number | string, newPref: ViewingPreference) => void;
 }
@@ -17,54 +17,12 @@ export function ShowScheduleModal({
   onTogglePreference,
 }: ShowScheduleModalProps) {
   const [activeSeason, setActiveSeason] = useState<number>(1);
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [episodes, setEpisodes] = useState<Episode[]>(show.episodes || []);
   const [isLoading, setIsLoading] = useState(false);
 
   const today = useMemo(() => formatDate(new Date()), []);
 
-  // Sync episodes or fetch if empty
-  useEffect(() => {
-    if (!show) return;
-
-    if (show.episodes && show.episodes.length > 0) {
-      setEpisodes(show.episodes);
-      // Default to the latest season
-      const seasons = Array.from(new Set(show.episodes.map((e) => e.seasonNumber))).sort(
-        (a, b) => b - a
-      );
-      if (seasons.length > 0) setActiveSeason(seasons[0]);
-    } else {
-      setIsLoading(true);
-      fetch(`/api/shows/${show.tvmazeId}/schedule`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.episodes) {
-            setEpisodes(data.episodes);
-            const seasons = Array.from(new Set<number>(data.episodes.map((e: Episode) => e.seasonNumber))).sort(
-              (a, b) => b - a
-            );
-            if (seasons.length > 0) setActiveSeason(seasons[0]);
-          }
-        })
-        .catch((err) => console.error("Failed to load schedule:", err))
-        .finally(() => setIsLoading(false));
-    }
-  }, [show]);
-
-  // Handle ESC key to close
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  if (!show) return null;
-
-  const platform = STREAMING_PLATFORMS[show.streamingService];
-
-  // Group episodes by season
+  // Group episodes by season - always called unconditionally at the top level
   const episodesBySeason = useMemo(() => {
     const map: Record<number, Episode[]> = {};
     for (const ep of episodes) {
@@ -77,6 +35,43 @@ export function ShowScheduleModal({
     }
     return map;
   }, [episodes]);
+
+  // Sync episodes or fetch if empty
+  useEffect(() => {
+    if (show.episodes && show.episodes.length > 0) {
+      setEpisodes(show.episodes);
+      const seasons = Array.from(new Set(show.episodes.map((e) => e.seasonNumber))).sort(
+        (a, b) => b - a
+      );
+      if (seasons.length > 0) setActiveSeason(seasons[0]);
+    } else {
+      setIsLoading(true);
+      fetch(`/api/shows/${show.tvmazeId}/schedule`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.episodes) {
+            setEpisodes(data.episodes);
+            const seasons = Array.from(
+              new Set<number>(data.episodes.map((e: Episode) => e.seasonNumber))
+            ).sort((a, b) => b - a);
+            if (seasons.length > 0) setActiveSeason(seasons[0]);
+          }
+        })
+        .catch((err) => console.error("Failed to load schedule:", err))
+        .finally(() => setIsLoading(false));
+    }
+  }, [show.id, show.tvmazeId, show.episodes]);
+
+  // Handle ESC key to close
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const platform = STREAMING_PLATFORMS[show.streamingService];
 
   const seasonsList = Object.keys(episodesBySeason)
     .map(Number)
